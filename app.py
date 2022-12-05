@@ -27,9 +27,18 @@ import math
 import types
 import pkg_resources
 
+import dash as d
+from dash import html
+from dash import dcc
+import dash_bootstrap_components as dbc
+
 
 # In[3]:
 
+
+app = d.Dash(__name__, external_stylesheets=[dbc.themes.LUX])
+server = app.server
+app.title = 'California 2022 Election Prop 30' 
 
 excel_data = pd.read_excel('Hydrogen_Refueling_Stations_Last updated_10-18-2022.xlsx')
 df = pd.DataFrame(excel_data)
@@ -568,20 +577,6 @@ pvalue_table.show()
 
 # In[49]:
 
-
-import dash as d
-from dash import html
-from dash import dcc
-import dash_bootstrap_components as dbc
-from jupyter_dash import JupyterDash
-
-
-# In[50]:
-
-
-app = d.Dash(__name__, external_stylesheets=[dbc.themes.LUX])
-server = app.server
-app.title = 'California 2022 Election Prop 30' 
 
 
 # In[51]:
