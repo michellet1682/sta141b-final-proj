@@ -12,8 +12,8 @@ import addfips
 from urllib.request import urlopen
 import json
 import math
-import types
-import pkg_resources
+#import types
+#import pkg_resources
 
 import datetime
 
