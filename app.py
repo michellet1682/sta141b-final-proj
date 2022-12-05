@@ -7,18 +7,6 @@
 # general
 import pandas as pd
 import numpy as np
-import requests
-
-# plotting
-import plotly.express as px
-import plotly.graph_objects as go
-
-# stats
-from statsmodels.stats.proportion import proportions_ztest
-
-
-# In[2]:
-
 
 import addfips
 from urllib.request import urlopen
@@ -27,18 +15,36 @@ import math
 import types
 import pkg_resources
 
+import datetime
+
+# plotting
+import plotly.express as px
+import plotly.graph_objects as go
+
+# stats
+from statsmodels.stats.proportion import proportions_ztest
+from sklearn.linear_model import LinearRegression
+from scipy.stats import pearsonr
+import statsmodels.api as sm 
+
+# dashboard
 import dash as d
 from dash import html
 from dash import dcc
 import dash_bootstrap_components as dbc
+from jupyter_dash import JupyterDash
 
 
-# In[3]:
+# In[2]:
 
 
 app = d.Dash(__name__, external_stylesheets=[dbc.themes.LUX])
 server = app.server
 app.title = 'California 2022 Election Prop 30' 
+
+
+# In[3]:
+
 
 excel_data = pd.read_excel('Hydrogen_Refueling_Stations_Last updated_10-18-2022.xlsx')
 df = pd.DataFrame(excel_data)
@@ -77,8 +83,7 @@ for i in range(len(county)):
 
 def hydrogen_refuel():
     fig1 = go.Figure(data=[go.Bar(x=county_hydrogen_fuel['county'], 
-                                 y = county_hydrogen_fuel['total hydrogen stations'])],
-                    layout=go.Layout(title=go.layout.Title(text="Hydrogen Refueling Stations by county")))
+                                 y = county_hydrogen_fuel['total hydrogen stations'])])
     return fig1
 
 
@@ -353,25 +358,263 @@ ev_year_fig.layout.coloraxis.colorbar = {'title': 'Number of EVs',
 #ev_year_fig.show()
 
 
-# In[ ]:
-
-
-
-
-
-# ## Twitter Analysis
+# ## Luke's OLS
 
 # In[30]:
 
 
-url = "https://raw.githubusercontent.com/lbarrett24/CA-Election-Data-Challenge/Connor2-branch/STA141B_Project_Sentiment_Analysis_Data.csv"
-res = requests.get(url, allow_redirects=True)
-with open('cleaned_data.csv','wb') as file:
-    file.write(res.content)
-sa_df = pd.read_csv('cleaned_data.csv')
+df_ols = pd.read_csv("alt_fuel_stations_Oct_21_2022.csv")
 
 
 # In[31]:
+
+
+#convert object to datetime object
+df_ols['Open Date'] = pd.to_datetime(df_ols['Open Date'], format="%Y-%m-%d")
+
+
+# In[32]:
+
+
+#extract only the year
+charger_year = pd.DatetimeIndex(df_ols['Open Date']).year
+
+
+# In[33]:
+
+
+charger_year = pd.DataFrame(charger_year)
+charger_year.dropna()
+charger_year.astype('Int64')
+
+
+# In[34]:
+
+
+charger_year_count = charger_year['Open Date'].value_counts()
+charger_year_count = pd.DataFrame(charger_year_count)
+charger_year_count.index = charger_year_count.index.astype('Int64')
+charger_year_count = charger_year_count.rename(columns={'Open Date':'Total Chargers'})
+charger_year_count = charger_year_count.sort_index()
+
+
+# In[35]:
+
+
+year_df.drop('County', axis=1, inplace=True)
+year_df = year_df.groupby('Year')['Total Purchased EV'].sum()
+year_df = pd.DataFrame(year_df)
+year_df = year_df.sort_index()
+
+
+# In[36]:
+
+
+merged_df = pd.merge(year_df, charger_year_count, left_index=True, right_index=True)
+
+
+# In[37]:
+
+
+dta = merged_df[['Total Purchased EV','Total Chargers']]
+dta = sm.add_constant(dta) #constant to fit intercept of linear model
+
+
+# In[38]:
+
+
+ols1 = sm.OLS(dta['Total Purchased EV'], dta.drop(columns = 'Total Purchased EV')) #Initialize the OLS 
+ols1_res = ols1.fit() # ols fitting
+summary1 = ols1_res.summary()
+
+
+# In[39]:
+
+
+pearsonr(dta['Total Purchased EV'], dta['Total Chargers'])
+
+
+# ## Andrew stuff
+
+# In[40]:
+
+
+df_ev = pd.read_csv("New_ZEV_Sales.csv")
+# Electric Car sales
+
+
+# In[41]:
+
+
+sales_2022 = df_ev[df_ev["Data Year"] == 2022]
+# only including car sales from 2022
+
+
+# In[42]:
+
+
+counties = sales_2022["County"].unique()
+# returns all county names
+counties = list(counties)
+
+
+# In[43]:
+
+
+county_sales = []
+for i in counties:
+    county_sales.append(sales_2022.loc[sales_2022['County'] == i, 'Number of Vehicles'].sum())
+# Sums all ZEV sales by county
+
+
+# In[44]:
+
+
+sales_by_county = pd.DataFrame(county_sales, counties)
+# Data Frame of ZEV sales in 2022 by county
+
+
+# In[45]:
+
+
+df1 = pd.read_csv('CA_county_pop.csv')
+# Load in CA 2022 Population data by County
+
+
+# In[46]:
+
+
+county_data = sales_by_county
+county_data.rename(columns = {0:'2022 Sales'}, inplace = True)
+# Renames Sales Column
+
+
+# In[47]:
+
+
+county_data["2022 Sales"] = county_data["2022 Sales"]/list(df1.iloc[:, 0])
+# Takes total sales of ZEV vehicles in 2022 by county divided by total population of county
+county_data.rename(columns = {'2022 Sales':'sales'}, inplace = True)
+
+
+# In[48]:
+
+
+df2 = pd.read_csv('Prop 30 Election Results - Sheet1.csv')
+# Loads Election Data by County.  This was taken from NYT article table which was converted to excel which was converted ot csv
+# Link of nyt article: https://www.nytimes.com/interactive/2022/11/08/us/elections/results-california-proposition-30-electric-vehicle-incentive-tax.html
+
+
+# In[49]:
+
+
+x = list(df2.iloc[:, 1])
+x[18] = 58 #original file had 58% instead of 58
+
+
+# In[50]:
+
+
+x = [int(i)/100 for i in x]
+# changes voter data into integers
+
+
+# In[51]:
+
+
+county_data['vote'] = x
+# adds No vote data to County Data Frame
+
+
+# In[52]:
+
+
+q1y=county_data['vote'].quantile(0.25)
+q3y=county_data['vote'].quantile(0.75)
+IQRy=q3y-q1y
+y_outliers = county_data['vote'][((county_data['vote']<(q1y-1.5*IQRy)) | (county_data['vote']>(q3y+1.5*IQRy)))]
+# Finds outliers of voter data
+
+
+# In[53]:
+
+
+q1x=county_data['sales'].quantile(0.25)
+q3x=county_data['sales'].quantile(0.75)
+IQRx=q3x-q1x
+x_outliers = county_data['sales'][((county_data['sales']<(q1x-1.5*IQRx)) | (county_data['sales']>(q3x+1.5*IQRx)))]
+# finds outliers of ZEV sales data
+
+
+# In[54]:
+
+
+x_outliers = pd.DataFrame(x_outliers)
+y_outliers = pd.DataFrame(y_outliers)
+
+
+# In[55]:
+
+
+outliers = [y_outliers.index[0]] + [x_outliers.index[0] ] + [x_outliers.index[1] ] + [x_outliers.index[2] ] + [x_outliers.index[3] ] + [x_outliers.index[4] ]
+#indexes of all outliers
+
+
+# In[56]:
+
+
+county_data = county_data.drop(outliers)
+county_data = sm.add_constant(county_data)
+# adds B0 to data
+
+
+# In[57]:
+
+
+ols = sm.OLS(county_data['vote'], county_data.drop(columns = 'vote')) #Initialize the OLS 
+ols_res = ols.fit() # ols fitting
+# fits data
+
+
+# In[58]:
+
+
+summary = ols_res.summary()
+#summary of Data
+#print(summary)
+
+
+# In[59]:
+
+
+ols_res.rsquared
+#r squared of data
+
+
+# In[60]:
+
+
+county_data= county_data.drop(columns=['const'])
+#removes B0's from data
+
+
+# In[61]:
+
+
+no_votes = px.scatter(county_data,x ="sales", y ="vote", trendline = 'ols', trendline_scope = 'overall', title = "No Votes by 2022 ZEV Sales")
+
+# Plots Data with trend line
+
+
+# ## Twitter Analysis
+
+# In[62]:
+
+
+sa_df = pd.read_csv('STA141B_Project_Sentiment_Analysis_Data.csv')
+
+
+# In[63]:
 
 
 counts_df = sa_df.groupby('Method')['Sentiment'].value_counts().to_frame() # get counts of each sentiment and turn into dataframe
@@ -382,7 +625,7 @@ total_counts = np.repeat(total_counts, 3) # repeat total counts to get correct d
 counts_df['Percentage'] = counts_df['Count'] / total_counts # make new column containing percent of each sentiment
 
 
-# In[32]:
+# In[64]:
 
 
 # bar plot containing all 3 sentiments for the two models
@@ -396,10 +639,10 @@ fig_all = px.bar(data_frame=counts_df,
 fig_all.update_traces(textposition = 'inside', textfont_color = 'white')
 fig_all.update_layout(xaxis = {'categoryorder': 'array', 'categoryarray': ['Negative', 'Neutral', 'Positive']},
                       font_size = 14)
-fig_all.show()
+#fig_all.show()
 
 
-# In[33]:
+# In[65]:
 
 
 # function to format floats into percent format
@@ -413,7 +656,7 @@ def format_percent(val: float) -> str:
     return format_val
 
 
-# In[34]:
+# In[66]:
 
 
 counts_no_neutral_df = counts_df[counts_df['Sentiment'] != 'Neutral'] # remove rows with neutral sentiment
@@ -424,7 +667,7 @@ counts_no_neutral_df['Percentage'] = counts_no_neutral_df['Count'] / total_count
 counts_no_neutral_df['Str Percentage'] = counts_no_neutral_df['Percentage'].apply(format_percent) # convert floats into percent-formatted strings
 
 
-# In[35]:
+# In[67]:
 
 
 # bar plot of positive and negative sentiments for each model
@@ -438,10 +681,10 @@ fig_no_neutral = px.bar(data_frame=counts_no_neutral_df,
 fig_no_neutral.update_traces(textposition = 'inside', textfont_color = 'white')
 fig_no_neutral.update_layout(xaxis = {'categoryorder': 'array', 'categoryarray': ['Negative', 'Positive']},
                       font_size = 14)
-fig_no_neutral.show()
+#fig_no_neutral.show()
 
 
-# In[36]:
+# In[68]:
 
 
 # bar plot of percentages of positive and negative sentiments for each model
@@ -455,10 +698,10 @@ fig_perc_no_neutral = px.bar(data_frame=counts_no_neutral_df,
 fig_perc_no_neutral.update_traces(textposition = 'inside', textfont_color = 'white')
 fig_perc_no_neutral.update_layout(xaxis = {'categoryorder': 'array', 'categoryarray': ['Negative', 'Positive']},
                       font_size = 14)
-fig_perc_no_neutral.show()
+#fig_perc_no_neutral.show()
 
 
-# In[37]:
+# In[69]:
 
 
 # assign variables for actual poll results and sample size
@@ -467,7 +710,7 @@ poll_positive_count = 4_524_334
 poll_sample = poll_negative_count + poll_positive_count
 
 
-# In[38]:
+# In[70]:
 
 
 # create dataframe containig poll data
@@ -476,14 +719,14 @@ counts_poll_df['Percentage'] = counts_poll_df['Count'] / poll_sample # percentag
 counts_poll_df['Str Percentage'] = counts_poll_df['Percentage'].apply(format_percent) # string representation of percentages
 
 
-# In[39]:
+# In[71]:
 
 
 # combina sentiment analysis data and poll data
 counts_combined_df = pd.concat([counts_no_neutral_df, counts_poll_df])
 
 
-# In[40]:
+# In[72]:
 
 
 # bar plot of percentages of positive and negative sentiment of each model and poll results
@@ -497,16 +740,16 @@ fig_combined = px.bar(data_frame=counts_combined_df,
 fig_combined.update_traces(textposition = 'inside', textfont_color = 'white')
 fig_combined.update_layout(xaxis = {'categoryorder': 'array', 'categoryarray': ['Negative', 'Positive']},
                       font_size = 14)
-fig_combined.show()
+#fig_combined.show()
 
 
-# In[41]:
+# In[73]:
 
 
 alpha = 0.05
 
 
-# In[42]:
+# In[74]:
 
 
 # get positive and negative counts for each model, as well as sample size
@@ -516,7 +759,7 @@ r_sample = r_negative_count + r_positive_count
 v_sample = v_negative_count + v_positive_count
 
 
-# In[43]:
+# In[75]:
 
 
 # comparing Negative and No
@@ -524,7 +767,7 @@ z_stat_r_neg, p_value_r_neg = proportions_ztest(count = [r_negative_count, poll_
 p_value_r_neg
 
 
-# In[44]:
+# In[76]:
 
 
 # comparing Positive and Yes
@@ -532,7 +775,7 @@ z_stat_r_pos, p_value_r_pos = proportions_ztest(count = [r_positive_count, poll_
 p_value_r_pos
 
 
-# In[45]:
+# In[77]:
 
 
 # comparing Negative and No
@@ -540,7 +783,7 @@ z_stat_v_neg, p_value_v_neg = proportions_ztest(count = [v_negative_count, poll_
 p_value_v_neg
 
 
-# In[46]:
+# In[78]:
 
 
 # comparing Positive and Yes
@@ -548,7 +791,7 @@ z_stat_v_pos, p_value_v_pos = proportions_ztest(count = [v_positive_count, poll_
 p_value_v_pos
 
 
-# In[47]:
+# In[79]:
 
 
 methods = ['RoBERTa', 'RoBERTa','VADER', 'VADER'] # list of methods
@@ -557,7 +800,7 @@ pvalues = [round(p_value_r_pos, 3), round(p_value_r_neg, 3), float(f'{p_value_v_
 conclusions = ['Reject' if p <= alpha else 'Fail to Reject' for p in pvalues] # list of conclusions
 
 
-# In[48]:
+# In[80]:
 
 
 # make table containing p-value data
@@ -572,50 +815,153 @@ pvalue_table = go.Figure(data = [go.Table(
                  line_color = 'darkslategray',
                  align = 'left')
 )])
-pvalue_table.show()
+#pvalue_table.show()
 
 
-# In[49]:
+# In[81]:
 
 
+import dash as d
+from dash import html
+from dash import dcc
+import dash_bootstrap_components as dbc
+from jupyter_dash import JupyterDash
 
-# In[51]:
+
+# In[82]:
+
+
+methodology = """
+The [RoBERTa](https://huggingface.co/cardiffnlp/twitter-roberta-base-sentiment-latest) model we used is a deep learning model that was trained on “~124 million tweets from January 2018 to December 2021” and is finetuned for Twitter sentiment analysis. This model uses neural networks and is much more powerful than the VADER model, so we expected it to perform much better. Thus, the sentiments determined by the RoBERTa model are what we used to answer if the opinions on Twitter are representative of election results.
+
+The [VADER](https://www.nltk.org/_modules/nltk/sentiment/vader.html) model is from the NLTK package and is a “lexicon and simple rule-based model for sentiment analysis” .[¹](https://towardsdatascience.com/social-media-sentiment-analysis-in-python-with-vader-no-training-required-4bc6a21e87b8) It uses a dictionary to determine the sentiment scores of individual words and phrases and then calculates a compound score to rate the sentiment of the entire text. Since this model is not trained on real data and only follows relatively basic rules, its performance was expected to be worse than the RoBERTa model.
+
+Before running all of the Tweets through the two models, we did some basic preprocessing on the texts. Any user mention (i.e “@johnsmith123”) was replaced with “@user”. Additionally, any link was replaced with “http”. After completing these basic changes, all of the Tweets were run through the two models.
+
+After determining the sentiments of the Tweets, we removed all the Tweets that had Neutral sentiment and found the proportions of Positive and Negative sentiments of the remaining Tweets for each model. We then compared those proportions with the actual poll results using two-proportion z-tests.
+
+"""
+
+
+# In[83]:
 
 
 app.layout = html.Div(children=[
     html.Div(children=[
         html.Div(children=[
-            html.H1(children="California 2022 Election Prop 30"),
-            html.H2(children="STA 141B Final Project - Group 27")
-        ]),
-        html.Div(children=[
-            html.Img(src=d.get_asset_url("/assets/vote.png")),
-        ]),
+            html.Div(children=[
+                html.H1(children="California 2022 Election Prop 30"),
+                html.H2(children="STA 141B Final Project - Group 27")
+            ]),
+        ], className="one-half column", id="title"),
     ]),
     dcc.Tabs(id='tab1', children=[
-        dcc.Tab(label="Twitter Sentiment Analysis", children=[
-            html.Div(className="row", children=[
-                html.Div(className="eight columns pretty_container", children=[
-                    dcc.Graph(id="count_prop30",
-                              figure = fig_all)
-                ]),
-                html.Div(className="four columns pretty_container", children=[
-                    dcc.Graph(id="count_no_neutral",
-                              figure = fig_no_neutral)
-                ]),
+        dcc.Tab(label="Project Context", children=[
+            html.Div(children=[
+                html.H2("Members"),
+                html.P("Lukas Barrett"),
+                html.P("Kaleem Ezatullah"),
+                html.P("Andrew Muench"),
+                html.P("Michelle Tsang"),
+                html.P("Connor Young")
             ]),
-            html.Div(className="row", children=[
-                html.Div(className="fix columns pretty_container", children=[
-                    dcc.Graph(id="percent_with_prop",
-                              figure = fig_combined)
+            html.Div(children=[
+                html.Div(children=[
+                    html.H1("Proposition 30"),
+                    html.P("Prop 30 will increase taxes by 1.5% for those with a personal income of $2 million or more. These taxes will go towards funding electric car rebates, building charging stations, and wildfire prevention."),
+                    html.P("Yes - This will help improve air quality in the state, not only by having more firefighting training to stop wildfires, but reduce gas emissions from cars by switching to zero emission electric vehicles. Funding from the taxes will support low income communities with rebates and incentives from buying EVs."),
+                    html.P("No - With inflation, this is not a good time to be raising taxes as it will further disrupt the state’s unstable finances. The funding from the taxes will instead help big corporations like Lyft, who are required to increase the number of zero emission vehicles used.")
                 ]),
-                html.Div(className="fix columns pretty_container", children=[
-                    dcc.Graph(id="pval_table",
-                              figure = pvalue_table)
+                
+                html.Div(children=[
+                    html.H1("Questions"),
+                    html.H4("We will be focusing on the ZEV/EV sales and voting data of Prop 30. Here are our research questions."),
+                    html.P("Is Twitter an accurate representation of election results?"),
+                    html.P("What is the current climate of Zero Emissions Vehicles (ZEV) & Electric Vehicles(EV) & their chargers in California? How many more charging stations would be considered beneficial if Prop 30 is passed?"),
+                    html.P("How prepared is CA to completely shift from gas to ZEV/EV? By county?"),
+                    html.P("Is there a relationship between Electric Vehicle ownership and support for Prop 30?")
+                ]),
+                
+                html.Div(children=[
+                    html.H1("Data Sources"),
+                    html.A("Population of Each County in California", href="https://worldpopulationreview.com/states/california/counties",
+                          target="_blank"),
+                    html.Div([
+                        html.A("Prop 30 Results for Each County", href="https://www.nytimes.com/interactive/2022/11/08/us/elections/results-california-proposition-30-electric-vehicle-incentive-tax.html",
+                               target="_blank"),
+                    ]),
+                    html.Div([
+                        html.A("Datasets of ZEV/EVs and EV Chargers for California", href="https://www.energy.ca.gov/files/zev-and-infrastructure-stats-data",
+                              target="_blank")
+                    ]),
+                    html.Div([
+                        html.P([
+                            html.Br()
+                        ]),
+                    ]),
+                ]),
+                
+                html.Div(children=[
+                    html.H1("Github Repos"),
+                    html.Div([
+                        html.A("All code used for this project", href="https://github.com/lbarrett24/CA-Election-Data-Challenge/tree/main",
+                              target="_blank")
+                    ]),
+                    html.Div([
+                        html.A("Deployment connected to this Github Repo", href="https://github.com/michellet1682/STA141B-final-project/tree/main",
+                              target="_blank")
+                    ]),
                 ]),
             ]),
         ]),
-        dcc.Tab(label="EV Sales", children=[
+        
+        dcc.Tab(label="Twitter Sentiment Analysis", children=[
+            html.Div(children=[
+                html.H1(children="Intro"),
+                html.Div(children=[
+                    html.P("""To determine if Twitter is an accurate representation of election results, we used web scraping and sentiment analysis. We scrapped 2,612 Tweets related to Proposition 30 which were posted between July 1, 2022 and November 8, 2022 using the SNScrape package. We then used two sentiment analysis models (RoBERTa and VADER) to determine whether a Tweet was in support of Prop. 30 or not, as well as comparing the effectiveness of each model. For our analysis, a Positive sentiment corresponds to a Yes on Prop. 30 and a Negative sentiment corresponds to a No.
+                """)
+                ]),        
+            ]),
+            
+            html.Div(children=[
+                dcc.Markdown(children=methodology),
+            ]),
+            
+            html.Div(children=[
+                html.H1("Figure 1"),
+                dcc.Graph(id="count_prop30",
+                          figure = fig_all),
+            ]),
+            
+            html.Div(children=[
+                html.H1("Figure 2"),
+                dcc.Graph(id="count_no_neutral",
+                              figure = fig_no_neutral),
+                html.P("Based on the plot in Figure 1, we see that the VADER model resulted in primarily Positive sentiment, followed by Negative, and then Neutral. However, the RoBERTa model resulted in primarily Neutral sentiment, followed by Negative, and then Positive. If we remove the Neutral sentiments as in Figure 2, we see that the RoBERTa model resulted in slightly more Negative than Positive sentiments, whereas the VADER model resulted in over twice as many Positive sentiments than Negative. Overall, we see that the two models resulted in opposite majorities and that the VADER model had a much larger majority."),
+                html.P("We will now compare the results of the two models with the actual poll results.")
+            ]),
+            
+            html.Div(children=[
+                html.H1("Figure 3"),
+                dcc.Graph(id="percent_with_prop",
+                              figure = fig_combined),
+                html.P("Based on the plot in Figure 3, we see that the proportion of each sentiment from the RoBERTa model are very similar to the proportions of the actual poll results. The proportion of each sentiment from the VADER model, however, are very different from the actual poll results."),
+                html.P("To determine the statistical significance of these visible similarities and differences, we will perform several two-proportion z-tests. Our null hypothesis will be that the proportion of a specific sentiment from a model is equal to the proportion of that same sentiment from the ballot results. Our null hypothesis will be that the proportions are different."),
+                html.P("The results of these z-tests are shown in the table below.")
+            ]),
+            
+            html.Div(children=[
+                html.H1("Figure 4"),
+                dcc.Graph(id="pval_table",
+                              figure = pvalue_table),
+                html.P("From the table in Figure 4, we see that we failed to reject the null hypothesis for both tests involving the RoBERTa model. Thus, there was not significant evidence to conclude that the sentiment proportions from the RoBERTa model were different from the sentiment proportions from the poll."),
+                html.P("We also see that we rejected the null hypothesis for both tests involving the VADER model. Thus, there was significant evidence to conclude that the sentiment proportions from the VADER model were different from the sentiment proportions from the poll"),
+                html.P("From these results, we can conclude that RoBERTa model is far more accurate than the VADER model, and that the proportion of opinions on Twitter can accurately represent the results of an election.")
+            ]),
+        ]),
+        
+        dcc.Tab(label="ZEV/EV Sales and Electric Chargers", children=[
             html.Div([
                 html.H1(children='Hydrogen Refueling'),
 
@@ -634,11 +980,7 @@ app.layout = html.Div(children=[
             ]),
             # New Div for all elements in the new 'row' of the page
             html.Div([
-                html.H1(children='EV Purchased by Year'),
-
-                html.Div(children='''
-                    Interactive Bar Graph for EVs Purchased
-                '''),
+                html.H1(children='Total Electric Vehicles Purchased by Year'),
 
                 dcc.Graph(
                     id='graph2',
@@ -646,16 +988,12 @@ app.layout = html.Div(children=[
                 ),
 
                 html.P(
-                    'Although the earliest modern EV was sold in the late 1990s, EVs purchases started to rise in 2011. Areas with higher population density and higher median income like Los Angeles buys more EVs than other counties. The sharp increase in EV purchases in 2021 and 2022 signals the growing popularity of EVs over gas cars.'
+                    'Although the earliest modern EV was sold in the late 1990s, EVs purchases started to rise in 2011. Areas with higher population density and higher median income like Los Angeles will on average buy more EVs than other counties. The sharp increase in EV purchases in 2021 and 2022 signals the growing popularity of EVs over gas cars.'
                 ),
             ]),
 
                 html.Div([
-                html.H1(children='Percentage of EVs Purchased'),
-
-                html.Div(children='''
-                    Total Breakdown of EVs Purchased by County
-                '''),
+                html.H1(children='Percentage of Electric Vehicles Purchased by County'),
 
                 dcc.Graph(
                     id='graph3',
@@ -664,11 +1002,7 @@ app.layout = html.Div(children=[
             ]),
 
                 html.Div([
-                html.H1(children='All EV Chargers'),
-
-                html.Div(children='''
-                    Chargers in California
-                '''),
+                html.H1(children='EV Charging Station Types by County'),
 
                 dcc.Graph(
                     id='graph4',
@@ -698,11 +1032,7 @@ app.layout = html.Div(children=[
             ]),   
 
                 html.Div([
-                html.H1(children='EVs Heat Map'),
-
-                html.Div(children='''
-                    Click the play button at the bottom to see EVs over time
-                '''),
+                html.H1(children='EV Heat Map Over Time'),
 
                 dcc.Graph(
                     id='graph6',
@@ -712,15 +1042,45 @@ app.layout = html.Div(children=[
                 html.P(
                     'Starting in 2010, there is a massive increase in EVs purchased. Overtime, all counties increased their EV purchases, especially counties with bigger populations.'
                 )
-            ]),                
+            ]),
+            
+                html.Div([
+                    html.H1("Total Purchased EVs vs Total Chargers"),
+                    html.Div([
+                        html.P(str(summary1), style={'whiteSpace': 'break-spaces'}),
+                        html.H3("Analysis"),
+                        html.P("With an adjusted R squared value of 0.615, this tells us that about 61.5% of the variability on the number of chargers can be explained by the amount of EVs purchased. Although generally speaking we would want to obtain a model wit more accuracy, considering there may be many more factors that can be affecting the variability (and the huge BIC and AIC values) in this case, and adjusted r-squared of a little over 60% may be sufficient with the data we have in hand."),
+                        html.P("There is an error for high multicollinearity which suggests that total purchased EVs and total chargers have a high correlation."),
+                        html.P("After conducting a Pearson correlation test, we get r = 0.797 which explains the high multicollinearity. If there was more data with more variables, we could conduct a more insightful analysis on what affects total chargers in California.")
+                    ])
+            ]),            
+        ]),
+        dcc.Tab(label="2022 ZEV Sales vs. Prop 30 Votes", children=[
+            html.Div([
+                html.H1("Datasets"),
+                html.P("The data that we analyzed consist of 2 columns, sales and vote. The sales column is the sum of ZEV sales in 2022 divided by the populations of the counties at 2022. The vote column is the percentage of No votes per county"),
+                html.P("The goal of the data is to see if there is a connection between the ZEV sales in 2022 and the opposition to Prop 30."),
+                html.P("First, we removed the outliers of the data based on the vote percentage and ZEV sales which were San Francisco county ,Marin county, Monterey county, Orange County, San Mateo County, and Santa Clara County. Then, we fitted the vote data to the ZEV sales data.")
+            ]),
+            
+            html.Div([
+                html.P(str(summary), style={'whiteSpace': 'break-spaces'}),
+                html.P("The model is weak with only 18.3% of the data explained by the fit.  But the data seems to show a downward trend.  This would mean that as ZEV sales increase, then the No vote for Prop 30 decreases in the county.")
+            ]),
+            
+            html.Div([     
+                dcc.Graph(id="linreg",
+                         figure=no_votes),
+                html.P("")
+            ]),
+            
         ]),
     ]),
 ])
 
 
-# In[ ]:
+# In[84]:
 
 
 if __name__ == '__main__':
     app.run_server()
-
