@@ -899,7 +899,7 @@ app.layout = html.Div(children=[
                               target="_blank")
                     ]),
                     html.Div([
-                        html.A("Deployment connected to this Github Repo", href="https://github.com/michellet1682/STA141B-final-project/tree/main",
+                        html.A("Deployment connected to this Github Repo", href="https://github.com/michellet1682/sta141b-final-proj",
                               target="_blank")
                     ]),
                 ]),
@@ -1048,10 +1048,9 @@ app.layout = html.Div(children=[
         ]),
         dcc.Tab(label="2022 ZEV Sales vs. Prop 30 Votes", children=[
             html.Div([
-                html.H1("Datasets"),
                 html.P("The data that we analyzed consist of 2 columns, sales and vote. The sales column is the sum of ZEV sales in 2022 divided by the populations of the counties at 2022. The vote column is the percentage of No votes per county"),
                 html.P("The goal of the data is to see if there is a connection between the ZEV sales in 2022 and the opposition to Prop 30."),
-                html.P("First, we removed the outliers of the data based on the vote percentage and ZEV sales which were San Francisco county ,Marin county, Monterey county, Orange County, San Mateo County, and Santa Clara County. Then, we fitted the vote data to the ZEV sales data.")
+                html.P("First, we removed the outliers of the data based on the vote percentage and ZEV sales which were San Francisco county, Marin county, Monterey county, Orange County, San Mateo County, and Santa Clara County. Then, we fitted the vote data to the ZEV sales data.")
             ]),
             
             html.Div([
