@@ -818,15 +818,6 @@ pvalue_table = go.Figure(data = [go.Table(
 #pvalue_table.show()
 
 
-# In[81]:
-
-
-import dash as d
-from dash import html
-from dash import dcc
-import dash_bootstrap_components as dbc
-from jupyter_dash import JupyterDash
-
 
 # In[82]:
 
