@@ -32,7 +32,7 @@ import dash as d
 from dash import html
 from dash import dcc
 import dash_bootstrap_components as dbc
-from jupyter_dash import JupyterDash
+#from jupyter_dash import JupyterDash
 
 
 # In[2]:
